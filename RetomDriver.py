@@ -99,6 +99,17 @@ class RetomDriver:
             },
         }
 
+        self.signals_hq = {
+            "channel_hq": {
+                "amplA2harm": 1.0,
+                "amplB2harm": 0.0,
+                "amplC2harm": 0.0,
+                "amplA5harm": 1.0,
+                "amplB5harm": 0.0,
+                "amplC5harm": 0.0,                                                      
+            },
+        }
+
 
     def _ensure_com_initialized(self):
         """
@@ -209,6 +220,8 @@ class RetomDriver:
                 return self._disable_output()
             case "Out61":
                 return self._out61()
+            case "Out61HQ":
+                return self._out61_hq()            
             case _:
                 self.st_error = f"Unknown function: {self.st_function}"
                 logger.error(MODULE_NAME, self.st_error)
@@ -390,6 +403,60 @@ class RetomDriver:
             self.st_error = f"Out61 error: {e}"
             logger.error(MODULE_NAME, self.st_error)
             return False
+
+
+    def _out61_hq(self):
+        """Специальный режим Out61 (РЕТОМ-71) с гармониками"""
+        self._ensure_com_initialized()
+        try:
+            logger.info(MODULE_NAME, "Starting Out61 high harmonics mode...")
+            
+            ch_main = self.retom.NewAnalogChannels()
+            ch_main.dFrequency = self.signals["channel1"]["freq"]
+            ch_main.SetSinSignal(0, self.signals["channel1"]["amplUA"], self.signals["channel1"]["anglUA"])    # Ua
+            ch_main.SetSinSignal(1, self.signals["channel1"]["amplUB"], self.signals["channel1"]["anglUB"])    # Ub
+            ch_main.SetSinSignal(2, self.signals["channel1"]["amplUC"], self.signals["channel1"]["anglUC"])    # Uc
+            ch_main.SetSinSignal(3, self.signals["channel1"]["amplIA"], self.signals["channel1"]["anglIA"])    # Ia
+            ch_main.SetSinSignal(4, self.signals["channel1"]["amplIB"], self.signals["channel1"]["anglIB"])    # Ib
+            ch_main.SetSinSignal(5, self.signals["channel1"]["amplIC"], self.signals["channel1"]["anglIC"])    # Ic
+
+            ch_main.AddHarmonica(3, self.signals["channel1"]["amplIA"], self.signals["channel1"]["anglIA"], 50, 0)
+            ch_main.AddHarmonica(4, self.signals["channel1"]["amplIB"], self.signals["channel1"]["anglIB"], 50, 0)
+            ch_main.AddHarmonica(5, self.signals["channel1"]["amplIC"], self.signals["channel1"]["anglIC"], 50, 0)
+
+            ch_main.AddHarmonica(3, self.signals_hq["channel_hq"]["amplA2harm"], 0, 100, 0)
+            ch_main.AddHarmonica(4, self.signals_hq["channel_hq"]["amplB2harm"], 240, 100, 0)
+            ch_main.AddHarmonica(5, self.signals_hq["channel_hq"]["amplC2harm"], 120, 100, 0)
+
+            ch_main.AddHarmonica(3, self.signals_hq["channel_hq"]["amplA5harm"], 0, 250, 0)
+            ch_main.AddHarmonica(4, self.signals_hq["channel_hq"]["amplB5harm"], 240, 250, 0)
+            ch_main.AddHarmonica(5, self.signals_hq["channel_hq"]["amplC5harm"], 120, 250, 0)
+
+            ch_add = self.retom.NewAnalogChannels()
+            ch_add.dFrequency = self.signals["channel2"]["freq"]
+            ch_add.SetSinSignal(0, self.signals["channel2"]["amplUA"], self.signals["channel2"]["anglUA"])  # Ua2
+            ch_add.SetSinSignal(1, self.signals["channel2"]["amplUB"], self.signals["channel2"]["anglUB"])  # Ub2
+            ch_add.SetSinSignal(2, self.signals["channel2"]["amplUC"], self.signals["channel2"]["anglUC"])  # Uc2
+            ch_add.SetSinSignal(3, self.signals["channel2"]["amplIA"], self.signals["channel2"]["anglIA"])  # Ia2
+            ch_add.SetSinSignal(4, self.signals["channel2"]["amplIB"], self.signals["channel2"]["anglIB"])  # Ib2
+            ch_add.SetSinSignal(5, self.signals["channel2"]["amplIC"], self.signals["channel2"]["anglIC"])  # Ic2
+
+            mask = 0x00770077
+
+            #self.retom.SetMaxUI(max(58, 58, 58) * 1.2, max(5, 5, 5) * 1.2)
+            #self.retom.ChannelsReset()
+            #time.sleep(1.0)
+
+            result = self.retom.Out61(ch_main, mask, ch_add, mask)
+            logger.info(MODULE_NAME, f"Out61_hq completed with result: {result}")
+            return True
+            
+        except Exception as e:
+            self.st_error = f"Out61_hq error: {e}"
+            logger.error(MODULE_NAME, self.st_error)
+            return False
+
+
 
     def _on_binary_inputs(self, nGroup, dwBinaryInput):
         """Callback для обработки события бинарных входов"""
