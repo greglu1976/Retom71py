@@ -24,7 +24,7 @@ except ImportError:
 class RetomApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("RETOM-71 Controller v2.1 (Tkinter)")
+        self.root.title("RETOM-71 Controller v1.4")
         self.root.geometry("2000x1100")
         
         # Инициализация драйвера
@@ -594,6 +594,356 @@ class RetomApp:
             finally:
                 logger.remove_callback(self._on_log_message)
                 self.root.destroy()
+
+
+################################################################################################
+#################################      МЕТОДЫ АВТОМАТИЗАЦИИ    #################################
+################################################################################################
+
+# Добавьте эти методы в класс RetomApp после метода _execute_command
+
+    # ============ МЕТОДЫ ДЛЯ АВТОМАТИЗАЦИИ ============
+    
+    def create_device(self) -> bool:
+        """Создание COM-объекта Retom"""
+        result = self.retom_driver.create_retom()
+        if result:
+            self.status_var.set("Status: Created")
+            logger.info("GUI", "Device created via automation")
+        else:
+            self.status_var.set(f"Status: Create failed - {self.retom_driver.st_error}")
+            logger.error("GUI", f"Device creation failed via automation: {self.retom_driver.st_error}")
+        return result
+    
+    def open_device(self) -> bool:
+        """Открытие соединения с устройством"""
+        self.retom_driver.st_function = "Open"
+        result = self.retom_driver.run_retom()
+        if result:
+            dev_info = ""
+            if self.retom_driver.retom and hasattr(self.retom_driver.retom, 'ServerInfo'):
+                info = self.retom_driver.retom.ServerInfo
+                dev_info = f" | Dev: {info.DeviceNumber}, Ver: {info.Version}"
+            self.status_var.set(f"Status: Open{dev_info}")
+            logger.info("GUI", f"Device opened via automation{dev_info}")
+        else:
+            self.status_var.set(f"Status: Open failed - {self.retom_driver.st_error}")
+            logger.error("GUI", f"Device open failed via automation: {self.retom_driver.st_error}")
+        return result
+    
+    def close_device(self) -> bool:
+        """Закрытие соединения с устройством"""
+        self.retom_driver.st_function = "Close"
+        result = self.retom_driver.run_retom()
+        if result:
+            self.status_var.set("Status: Closed")
+            logger.info("GUI", "Device closed via automation")
+        else:
+            self.status_var.set(f"Status: Close failed - {self.retom_driver.st_error}")
+            logger.error("GUI", f"Device close failed via automation: {self.retom_driver.st_error}")
+        return result
+    
+    def enable_output(self) -> bool:
+        """Включение выходов"""
+        self.retom_driver.st_function = "Enable"
+        result = self.retom_driver.run_retom()
+        if result:
+            self.status_var.set("Status: Enabled")
+            logger.info("GUI", "Outputs enabled via automation")
+        else:
+            self.status_var.set(f"Status: Enable failed - {self.retom_driver.st_error}")
+            logger.error("GUI", f"Enable failed via automation: {self.retom_driver.st_error}")
+        return result
+    
+    def disable_output(self) -> bool:
+        """Отключение выходов"""
+        self.retom_driver.st_function = "Disable"
+        result = self.retom_driver.run_retom()
+        if result:
+            self.status_var.set("Status: Disabled")
+            logger.info("GUI", "Outputs disabled via automation")
+        else:
+            self.status_var.set(f"Status: Disable failed - {self.retom_driver.st_error}")
+            logger.error("GUI", f"Disable failed via automation: {self.retom_driver.st_error}")
+        return result
+    
+    def out61(self) -> bool:
+        """Выдача режима Out61 (основные сигналы)"""
+        self.retom_driver.st_function = "Out61"
+        result = self.retom_driver.run_retom()
+        if result:
+            self.status_var.set("Status: Out61 completed")
+            logger.info("GUI", "Out61 mode executed via automation")
+        else:
+            self.status_var.set(f"Status: Out61 failed - {self.retom_driver.st_error}")
+            logger.error("GUI", f"Out61 failed via automation: {self.retom_driver.st_error}")
+        return result
+    
+    def out61_hq(self) -> bool:
+        """Выдача режима Out61 с гармониками"""
+        # Сначала применяем текущие настройки гармоник
+        self._apply_harmonics()
+        self.retom_driver.st_function = "Out61HQ"
+        result = self.retom_driver.run_retom()
+        if result:
+            self.status_var.set("Status: Out61HQ completed")
+            logger.info("GUI", "Out61HQ mode executed via automation")
+        else:
+            self.status_var.set(f"Status: Out61HQ failed - {self.retom_driver.st_error}")
+            logger.error("GUI", f"Out61HQ failed via automation: {self.retom_driver.st_error}")
+        return result
+    
+    # ============ МЕТОДЫ ДЛЯ УПРАВЛЕНИЯ ПАРАМЕТРАМИ ============
+    
+    def set_signal_parameter(self, channel: str, param_name: str, value: float) -> bool:
+        """
+        Установка отдельного параметра сигнала
+        
+        Args:
+            channel: "channel1" или "channel2"
+            param_name: имя параметра (freq, amplUA, anglUA, amplIA, anglIA и т.д.)
+            value: значение параметра
+        
+        Returns:
+            bool: успех операции
+        """
+        try:
+            if channel not in ["channel1", "channel2"]:
+                logger.error("GUI", f"Invalid channel: {channel}")
+                return False
+            
+            if param_name not in self.retom_driver.signals[channel]:
+                logger.error("GUI", f"Invalid parameter: {param_name}")
+                return False
+            
+            # Проверка допустимых значений
+            if param_name == "freq":
+                if value < 10.0 or value > 200.0:
+                    logger.warning("GUI", f"Frequency {value} out of range [10..200]")
+                    value = max(10.0, min(200.0, value))
+            elif "amplU" in param_name:
+                if value < 0.0 or value > 300.0:
+                    logger.warning("GUI", f"Voltage {value} out of range [0..300]")
+                    value = max(0.0, min(300.0, value))
+            elif "amplI" in param_name:
+                if value < 0.0 or value > 100.0:
+                    logger.warning("GUI", f"Current {value} out of range [0..100]")
+                    value = max(0.0, min(100.0, value))
+            
+            # Устанавливаем значение в драйвер
+            self.retom_driver.signals[channel][param_name] = value
+            
+            # Обновляем GUI если переменная существует
+            if hasattr(self, 'signal_vars') and channel in self.signal_vars:
+                if param_name in self.signal_vars[channel]:
+                    self.signal_vars[channel][param_name].set(value)
+            
+            logger.info("GUI", f"Set {channel}.{param_name} = {value}")
+            return True
+            
+        except Exception as e:
+            logger.error("GUI", f"Error setting parameter: {e}")
+            return False
+    
+    def set_harmonic(self, harmonic_name: str, value: float) -> bool:
+        """
+        Установка параметра гармоники
+        
+        Args:
+            harmonic_name: имя гармоники (amplA2harm, amplA5harm, amplB2harm, amplB5harm, amplC2harm, amplC5harm)
+            value: амплитуда гармоники (0-100 В)
+        
+        Returns:
+            bool: успех операции
+        """
+        try:
+            if harmonic_name not in self.harmonics_vars:
+                logger.error("GUI", f"Invalid harmonic: {harmonic_name}")
+                return False
+            
+            # Ограничиваем значение
+            if value < 0:
+                value = 0
+            if value > 100:
+                value = 100
+                logger.warning("GUI", f"{harmonic_name} limited to 100 V")
+            
+            # Устанавливаем значение
+            self.harmonics_vars[harmonic_name].set(value)
+            
+            # Обновляем в драйвере
+            if hasattr(self.retom_driver, 'signals_hq'):
+                self.retom_driver.signals_hq["channel_hq"][harmonic_name] = value
+            
+            logger.info("GUI", f"Set {harmonic_name} = {value} V")
+            return True
+            
+        except Exception as e:
+            logger.error("GUI", f"Error setting harmonic: {e}")
+            return False
+    
+    def set_all_signals(self, channel: str, freq: float = None, 
+                        ua_ampl: float = None, ua_angl: float = None,
+                        ub_ampl: float = None, ub_angl: float = None,
+                        uc_ampl: float = None, uc_angl: float = None,
+                        ia_ampl: float = None, ia_angl: float = None,
+                        ib_ampl: float = None, ib_angl: float = None,
+                        ic_ampl: float = None, ic_angl: float = None) -> bool:
+        """
+        Установка всех параметров сигнала для канала
+        
+        Args:
+            channel: "channel1" или "channel2"
+            freq: частота (Гц)
+            ua_ampl, ua_angl: напряжение фазы A (В, град)
+            ub_ampl, ub_angl: напряжение фазы B (В, град)
+            uc_ampl, uc_angl: напряжение фазы C (В, град)
+            ia_ampl, ia_angl: ток фазы A (А, град)
+            ib_ampl, ib_angl: ток фазы B (А, град)
+            ic_ampl, ic_angl: ток фазы C (А, град)
+        
+        Returns:
+            bool: успех операции
+        """
+        try:
+            if channel not in ["channel1", "channel2"]:
+                logger.error("GUI", f"Invalid channel: {channel}")
+                return False
+            
+            if freq is not None:
+                self.set_signal_parameter(channel, "freq", freq)
+            if ua_ampl is not None:
+                self.set_signal_parameter(channel, "amplUA", ua_ampl)
+            if ua_angl is not None:
+                self.set_signal_parameter(channel, "anglUA", ua_angl)
+            if ub_ampl is not None:
+                self.set_signal_parameter(channel, "amplUB", ub_ampl)
+            if ub_angl is not None:
+                self.set_signal_parameter(channel, "anglUB", ub_angl)
+            if uc_ampl is not None:
+                self.set_signal_parameter(channel, "amplUC", uc_ampl)
+            if uc_angl is not None:
+                self.set_signal_parameter(channel, "anglUC", uc_angl)
+            if ia_ampl is not None:
+                self.set_signal_parameter(channel, "amplIA", ia_ampl)
+            if ia_angl is not None:
+                self.set_signal_parameter(channel, "anglIA", ia_angl)
+            if ib_ampl is not None:
+                self.set_signal_parameter(channel, "amplIB", ib_ampl)
+            if ib_angl is not None:
+                self.set_signal_parameter(channel, "anglIB", ib_angl)
+            if ic_ampl is not None:
+                self.set_signal_parameter(channel, "amplIC", ic_ampl)
+            if ic_angl is not None:
+                self.set_signal_parameter(channel, "anglIC", ic_angl)
+            
+            logger.info("GUI", f"All signals set for {channel}")
+            return True
+            
+        except Exception as e:
+            logger.error("GUI", f"Error setting all signals: {e}")
+            return False
+    
+    def set_all_harmonics(self, a2: float = None, a5: float = None,
+                          b2: float = None, b5: float = None,
+                          c2: float = None, c5: float = None) -> bool:
+        """
+        Установка всех гармоник
+        
+        Args:
+            a2, a5: гармоники для фазы A
+            b2, b5: гармоники для фазы B
+            c2, c5: гармоники для фазы C
+        
+        Returns:
+            bool: успех операции
+        """
+        try:
+            if a2 is not None:
+                self.set_harmonic("amplA2harm", a2)
+            if a5 is not None:
+                self.set_harmonic("amplA5harm", a5)
+            if b2 is not None:
+                self.set_harmonic("amplB2harm", b2)
+            if b5 is not None:
+                self.set_harmonic("amplB5harm", b5)
+            if c2 is not None:
+                self.set_harmonic("amplC2harm", c2)
+            if c5 is not None:
+                self.set_harmonic("amplC5harm", c5)
+            
+            logger.info("GUI", "All harmonics set")
+            return True
+            
+        except Exception as e:
+            logger.error("GUI", f"Error setting all harmonics: {e}")
+            return False
+    
+    def apply_signal_parameters(self) -> bool:
+        """Применение настроек сигналов (синхронизация GUI с драйвером)"""
+        try:
+            self._apply_signal_params()
+            return True
+        except Exception as e:
+            logger.error("GUI", f"Error applying signal parameters: {e}")
+            return False
+    
+    def apply_harmonic_parameters(self) -> bool:
+        """Применение настроек гармоник (синхронизация GUI с драйвером)"""
+        try:
+            self._apply_harmonics()
+            return True
+        except Exception as e:
+            logger.error("GUI", f"Error applying harmonic parameters: {e}")
+            return False
+    
+    def get_binary_inputs(self) -> List[bool]:
+        """
+        Получение текущего состояния бинарных входов
+        
+        Returns:
+            List[bool]: список из 16 булевых значений состояния входов
+        """
+        return self.inputs_state.copy()
+    
+    def get_binary_input_mask(self) -> int:
+        """
+        Получение маски бинарных входов
+        
+        Returns:
+            int: 16-битная маска состояния входов
+        """
+        mask = 0
+        for i, state in enumerate(self.inputs_state):
+            if state:
+                mask |= (1 << i)
+        return mask
+    
+    def wait_for_binary_input(self, input_number: int, target_state: bool = True, timeout: float = 10.0) -> bool:
+        """
+        Ожидание заданного состояния бинарного входа
+        
+        Args:
+            input_number: номер входа (1-16)
+            target_state: ожидаемое состояние (True=ON, False=OFF)
+            timeout: таймаут ожидания в секундах
+        
+        Returns:
+            bool: достигнуто ли ожидаемое состояние
+        """
+        import time
+        start_time = time.time()
+        
+        while time.time() - start_time < timeout:
+            if self.inputs_state[input_number - 1] == target_state:
+                logger.info("GUI", f"Binary input {input_number} reached state {target_state}")
+                return True
+            time.sleep(0.05)
+        
+        logger.warning("GUI", f"Timeout waiting for binary input {input_number} to reach state {target_state}")
+        return False
+
+
 
 
 def main():
