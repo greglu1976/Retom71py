@@ -24,7 +24,7 @@ except ImportError:
 class RetomApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("RETOM-71 Controller v2.0 (Tkinter)")
+        self.root.title("RETOM-71 Controller v2.1 (Tkinter)")
         self.root.geometry("1200x800")
         
         # Инициализация драйвера

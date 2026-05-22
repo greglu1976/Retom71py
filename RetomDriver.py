@@ -9,10 +9,10 @@ import sys
 
 from Logger import logger  # Импортируем логгер
 
-RTDI_TLB = r".\RTDI\RTDI.tlb"
-RTLINK_TLB = r".\RTDI\RTLink.tlb"
+RTDI_TLB = r".\RTDI.tlb"
+RTLINK_TLB = r".\RTLink.tlb"
 
-IP = "IP:192.168.11.146"
+
 FREQ = 50.0
 
 # Определяем MODULE_NAME перед использованием
@@ -34,7 +34,7 @@ class RetomDriverEvents:
 
 
 class RetomDriver:
-    def __init__(self):
+    def __init__(self, ip ="IP:192.168.11.146" ):
         # Загружаем модули TLB один раз при создании экземпляра
         try:
             comtypes.client.GetModule(RTDI_TLB)
@@ -43,6 +43,7 @@ class RetomDriver:
         except Exception as e:
             logger.error(MODULE_NAME, f"Could not load TLB modules: {e}")
 
+        self.IP = ip
         self.retom = None
         self.is_open = 0
         self.st_error = ""
@@ -62,6 +63,42 @@ class RetomDriver:
 
         # Внешний callback для бинарных входов
         self.external_binary_inputs_callback = None
+
+        # Сигналы для выдачи
+
+        self.signals = {
+            "channel1": {
+                "freq": 50.0,
+                "amplUA": 0.0,
+                "anglUA": 0.0,
+                "amplUB": 0.0,
+                "anglUB": 240.0,   
+                "amplUC": 0.0,
+                "anglUC": 120.0,
+                "amplIA": 1.0,
+                "anglIA": 0.0,
+                "amplIB": 1.0,
+                "anglIB": 240.0,   
+                "amplIC": 1.0,
+                "anglIC": 120.0,                                                       
+            },
+            "channel2": {
+                "freq": 50.0,
+                "amplUA": 0.0,
+                "anglUA": 0.0,
+                "amplUB": 0.0,
+                "anglUB": 240.0,   
+                "amplUC": 0.0,
+                "anglUC": 120.0,
+                "amplIA": 0.0,
+                "anglIA": 0.0,
+                "amplIB": 0.0,
+                "anglIB": 240.0,   
+                "amplIC": 0.0,
+                "anglIC": 120.0,                                                       
+            },
+        }
+
 
     def _ensure_com_initialized(self):
         """
@@ -88,6 +125,7 @@ class RetomDriver:
         
         try:
             self.retom = comtypes.client.CreateObject(RTDI.DualServer, interface=RTDI.IDualServer)
+            self.retom.SetMaxUI(max(58, 58, 58) * 1.2, max(5, 5, 5) * 1.2)
             logger.info(MODULE_NAME, "COM object created successfully")            
             # Даем драйверу время на запуск процесса RTDI.exe
             time.sleep(2.0) 
@@ -197,8 +235,8 @@ class RetomDriver:
             self.result_return = self.retom.SetWorkParam("RetomType_66")
             logger.debug(MODULE_NAME, "Work param set to RetomType_66")            
             
-            logger.info(MODULE_NAME, f"Attempting to open connection to {IP}...")
-            self.is_open = self.retom.Open(IP, 0)
+            logger.info(MODULE_NAME, f"Attempting to open connection to {self.IP}...")
+            self.is_open = self.retom.Open(self.IP, 0)
             
             if self.is_open == 1:
                 device_number = self.retom.ServerInfo.DeviceNumber
@@ -321,28 +359,28 @@ class RetomDriver:
             logger.info(MODULE_NAME, "Starting Out61 mode...")
             
             ch_main = self.retom.NewAnalogChannels()
-            ch_main.dFrequency = FREQ
-            ch_main.SetSinSignal(0, 0, 0.0)    # Ua
-            ch_main.SetSinSignal(1, 0, 240.0)  # Ub
-            ch_main.SetSinSignal(2, 0, 120.0)  # Uc
-            ch_main.SetSinSignal(3, 1.0, 0.0)  # Ia
-            ch_main.SetSinSignal(4, 1.0, 240.0) # Ib
-            ch_main.SetSinSignal(5, 1.0, 120.0) # Ic
+            ch_main.dFrequency = self.signals["channel1"]["freq"]
+            ch_main.SetSinSignal(0, self.signals["channel1"]["amplUA"], self.signals["channel1"]["anglUA"])    # Ua
+            ch_main.SetSinSignal(1, self.signals["channel1"]["amplUB"], self.signals["channel1"]["anglUB"])    # Ub
+            ch_main.SetSinSignal(2, self.signals["channel1"]["amplUC"], self.signals["channel1"]["anglUC"])    # Uc
+            ch_main.SetSinSignal(3, self.signals["channel1"]["amplIA"], self.signals["channel1"]["anglIA"])    # Ia
+            ch_main.SetSinSignal(4, self.signals["channel1"]["amplIB"], self.signals["channel1"]["anglIB"])    # Ib
+            ch_main.SetSinSignal(5, self.signals["channel1"]["amplIC"], self.signals["channel1"]["anglIC"])    # Ic
 
             ch_add = self.retom.NewAnalogChannels()
-            ch_add.dFrequency = FREQ
-            ch_add.SetSinSignal(0, 0.0, 0.0)   # Ua2
-            ch_add.SetSinSignal(1, 0.0, 240.0) # Ub2
-            ch_add.SetSinSignal(2, 0.0, 120.0) # Uc2
-            ch_add.SetSinSignal(3, 0.0, 0.0)   # Ia2
-            ch_add.SetSinSignal(4, 0.0, 240.0) # Ib2
-            ch_add.SetSinSignal(5, 0.0, 120.0) # Ic2
+            ch_add.dFrequency = self.signals["channel2"]["freq"]
+            ch_add.SetSinSignal(0, self.signals["channel2"]["amplUA"], self.signals["channel2"]["anglUA"])  # Ua2
+            ch_add.SetSinSignal(1, self.signals["channel2"]["amplUB"], self.signals["channel2"]["anglUB"])  # Ub2
+            ch_add.SetSinSignal(2, self.signals["channel2"]["amplUC"], self.signals["channel2"]["anglUC"])  # Uc2
+            ch_add.SetSinSignal(3, self.signals["channel2"]["amplIA"], self.signals["channel2"]["anglIA"])  # Ia2
+            ch_add.SetSinSignal(4, self.signals["channel2"]["amplIB"], self.signals["channel2"]["anglIB"])  # Ib2
+            ch_add.SetSinSignal(5, self.signals["channel2"]["amplIC"], self.signals["channel2"]["anglIC"])  # Ic2
 
             mask = 0x00770077
 
-            self.retom.SetMaxUI(max(58, 58, 58) * 1.2, max(5, 5, 5) * 1.2)
-            self.retom.ChannelsReset()
-            time.sleep(1.0)
+            #self.retom.SetMaxUI(max(58, 58, 58) * 1.2, max(5, 5, 5) * 1.2)
+            #self.retom.ChannelsReset()
+            #time.sleep(1.0)
 
             result = self.retom.Out61(ch_main, mask, ch_add, mask)
             logger.info(MODULE_NAME, f"Out61 completed with result: {result}")
