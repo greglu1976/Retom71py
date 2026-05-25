@@ -1,0 +1,18 @@
+{
+    "T_SWCTRL_1_SWCTRL_FuncEnabled": "КП: Ввод",
+    "T_SWCTRL_1_SWCTRL_FuncOperDisabled": "КП: Оперативный вывод",
+    "T_SWCTRL_1_CBCSWI1_OpOpn": "КП / УВ: Отключить",
+    "T_SWCTRL_1_CBCSWI1_SwitchInProgress": "КП / УВ: Идет переключение",
+    "T_SWCTRL_1_CBCSWI1_OpTmAlm": "КП / УВ: Прев. времени пер.",
+    "T_SWCTRL_1_CBCSWI1_OpCls": "КП / УВ: Включить",
+    "T_SWCTRL_1_CBCSWI1_CBPosInterm": "КП / УВ: Не определено",
+    "T_SWCTRL_1_CBCSWI1_PosOpn": "КП / УВ: Отключено",
+    "T_SWCTRL_1_CBCSWI1_PosCls": "КП / УВ: Включено",
+    "T_SWCTRL_1_CBCSWI1_CBPosFault": "КП / УВ: Неисправность",
+    "T_SwitchDevice_1_CB1_OpnCB_relay": "В: Отключить (реле)",
+    "T_SwitchDevice_1_CB1_ClsCB_relay": "В: Включить (реле)",
+    "T_LVCBSUP_1_RCBF1_CBFailureTrip": "КСВ: В аварийно отключен",
+    "T_LVCBSUP_1_RCBF1_BlkToOpn": "КСВ: Блокировка откл",
+    "T_SignAssembly_1_SwOperExcTim": "СС: Прев. вр. пер. КА",
+    "T_LVALH_1_CALH1_Alarm": "ПС: Пуск"
+}

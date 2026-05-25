@@ -1,0 +1,14 @@
+{
+    "CBPosOpn": "В отключен (б/к)",
+    "CBPosCls": "В включен (б/к)",
+    "DI_ControllerDisable": "Вывод терминала",
+    "DI_SWCTRL": "ОВ КП",
+    "Reset": "Сброс",
+    "LocKey": "Местное",
+    "OpnCBFrmCtrlPanel": "Отключить В от ПУ",
+    "ClsCBFrmCtrlPanel": "Включить В от ПУ",
+	"OpnCBFrmRemoteCtrl": "Отключить В от ТУ",
+	"ClsCBFrmRemoteCtrl": "Включить В от ТУ",
+    "ExternalBlkCB": "Внеш. блок. упр. В"
+}
+

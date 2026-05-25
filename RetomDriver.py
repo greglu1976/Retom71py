@@ -3,7 +3,7 @@ import comtypes.client
 import subprocess
 import threading
 from comtypes.client import GetEvents
-from comtypes.gen import RTDI, RTLink
+from comtypes.gen import RTDI #, RTLink
 import pythoncom
 import sys
 
@@ -457,7 +457,6 @@ class RetomDriver:
             return False
 
 
-
     def _on_binary_inputs(self, nGroup, dwBinaryInput):
         """Callback для обработки события бинарных входов"""
         logger.info(MODULE_NAME, f"Binary Inputs Event - Group: {nGroup}, Value: {dwBinaryInput:016b}")
@@ -472,6 +471,79 @@ class RetomDriver:
         """Установка внешнего обработчика событий бинарных входов"""
         self.external_binary_inputs_callback = callback
         logger.info(MODULE_NAME, "Binary inputs callback set")
+
+
+    def read_input_contacts(self, mode="mask"):
+        """
+        Read input contacts.
+        
+        Args:
+            mode (str): Output format - "mask" (int), "list" (bool list), or "dict"
+        
+        Returns:
+            Depending on mode:
+                - "mask": 16-bit integer mask (In1 = bit 0, In16 = bit 15)
+                - "list": List of 16 booleans [In1...In16]
+                - "dict": Dictionary {"In1": bool, ..., "In16": bool}
+                - None on error
+        """
+        self._ensure_com_initialized()
+        
+        if not self.retom:
+            self.st_error = "Retom not initialized"
+            logger.error(MODULE_NAME, self.st_error)
+            return None
+        
+        try:
+            import array
+            byte_array = array.array('L', [0, 0])
+            result = self.retom.ReadInputContacts(byte_array)
+
+            # Debug logging (not print)
+            logger.debug(MODULE_NAME, f"ReadInputContacts result: {result}")
+            
+            # Parse result based on the actual structure
+            # Your COM method might return a tuple or the array directly
+            if isinstance(result, (list, tuple)) and len(result) >= 2:
+                # Format: (data_array, hresult) or similar
+                data = result[0]
+            elif hasattr(result, '__len__') and len(result) >= 2:
+                # Result might be the array itself
+                data = result
+            else:
+                self.st_error = f"Unexpected result format: {type(result)}"
+                return None
+            
+            # Extract bytes with proper order
+            # data[0] = In9-In16 (high byte)
+            # data[1] = In1-In8 (low byte)
+            low_byte = int(data[1]) & 0xFF
+            high_byte = int(data[0]) & 0xFF
+            
+            # Combine with byte swap (low byte becomes bits 0-7, high byte bits 8-15)
+            final_mask = low_byte | (high_byte << 8)
+            
+            # Log active contacts
+            active = [i+1 for i in range(16) if (final_mask >> i) & 1]
+            logger.info(MODULE_NAME, 
+                f"ReadInputContacts raw=[{high_byte}, {low_byte}] -> "
+                f"mask=0x{final_mask:04X} ({final_mask}), active={active if active else 'none'}")
+            
+            # Return requested format
+            if mode == "mask":
+                return final_mask
+            elif mode == "list":
+                return [(final_mask >> i) & 1 for i in range(16)]
+            elif mode == "dict":
+                return {f"In{i+1}": bool((final_mask >> i) & 1) for i in range(16)}
+            else:
+                logger.warning(MODULE_NAME, f"Unknown mode '{mode}', returning mask")
+                return final_mask
+                
+        except Exception as e:
+            self.st_error = f"ReadInputContacts exception: {e}"
+            logger.error(MODULE_NAME, self.st_error, exc_info=True)
+            return None
 
     def remove_retom(self):
         """Перезапуск соединения с Retom"""
