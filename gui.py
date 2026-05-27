@@ -66,7 +66,7 @@ class RetomApp:
 
         self.modes = None
         # Логируем запуск приложения
-        logger.info("GUI", "Application started")
+        #logger.info("GUI", "Application started")
 
     def _setup_ui(self):
         """Создание элементов интерфейса"""
@@ -337,8 +337,9 @@ class RetomApp:
         
         # Инициализируем поля значениями из драйвера
         self._load_params_from_driver()
-    
-    # ============ НОВЫЕ МЕТОДЫ-ЗАГЛУШКИ ============
+
+
+    # ============ НОВЫЕ МЕТОДЫ ============
     
     def _load_mode(self):
         """Загрузка одного режима из Excel файла"""
@@ -354,18 +355,15 @@ class RetomApp:
         )
         
         if not filepath:
-            logger.info("GUI", "Load Mode cancelled by user")
+            #logger.info("GUI", "Load Mode cancelled by user")
             self.status_var.set("Status: Load Mode cancelled")
             return
         
-        logger.info("GUI", f"Loading mode from file: {filepath}")
+        #logger.info("GUI", f"Loading mode from file: {filepath}")
         
         # Создаем объект Mode и передаем путь к файлу
         # Предполагается, что у вас есть класс Mode
         mode = Mode(filepath)  # Или TestMode(filepath)
-        print(mode.display_summary())
-
-
 
 
 
@@ -383,11 +381,11 @@ class RetomApp:
             )
             
             if not folder_path:
-                logger.info("GUI", "Load Modes cancelled by user")
+                #logger.info("GUI", "Load Modes cancelled by user")
                 self.status_var.set("Status: Load Modes cancelled")
                 return
             
-            logger.info("GUI", f"Selected folder: {folder_path}")
+            #logger.info("GUI", f"Selected folder: {folder_path}")
 
             self.modes = ModesHandler(folder_path)
             
@@ -406,6 +404,14 @@ class RetomApp:
             logger.error("GUI", f"Error in Load Modes: {e}")
             self.status_var.set(f"Status: Load Modes error - {str(e)[:50]}")
             messagebox.showerror("Ошибка", f"Ошибка загрузки режимов:\n{str(e)}")
+
+        vals_outs = list(self.modes.get_outputs_data().values())
+        vals_ins = list(self.modes.get_inputs_data().values())
+        self._update_setpoint_outputs_text(vals_ins)
+        self._update_expected_outputs_text(vals_outs)
+
+        self._apply_current_mode()
+
 
     def _create_mode_control_panel(self):
         pass
@@ -453,7 +459,8 @@ class RetomApp:
         if self.current_mode_index > 0:
             self.current_mode_index -= 1
             self._load_current_mode()
-            logger.info("GUI", f"Switched to previous mode, index: {self.current_mode_index}")
+            #logger.info("GUI", f"Switched to previous mode, index: {self.current_mode_index}")
+            self._apply_current_mode()
 
     def _next_mode(self):
         """Переключение на следующий режим"""
@@ -467,7 +474,11 @@ class RetomApp:
         if self.current_mode_index < self.modes.get_modes_count() - 1:
             self.current_mode_index += 1
             self._load_current_mode()
-            logger.info("GUI", f"Switched to next mode, index: {self.current_mode_index}")
+            #logger.info("GUI", f"Switched to next mode, index: {self.current_mode_index}")
+            self._apply_current_mode()
+
+
+######################################################################################################################################################
 
     def _apply_current_mode(self):
         """Применяет настройки текущего режима к устройству (выдает сигналы)"""
@@ -489,50 +500,130 @@ class RetomApp:
             return
         
         mode_name = mode.get_name() if hasattr(mode, 'get_name') else "Unknown"
-        
-        # Спрашиваем подтверждение
-        if messagebox.askyesno("Подтверждение", f"Применить режим '{mode_name}' к устройству?\n\nБудут выданы сигналы согласно настройкам режима."):
-            logger.info("GUI", f"Applying mode: {mode_name}")
-            
-            try:
-                # Применяем параметры сигналов
-                if hasattr(mode, 'get_parameter'):
-                    # Частота
-                    freq = mode.get_parameter("Settings", "Frequency")
-                    if freq:
-                        self.set_signal_parameter("channel1", "freq", float(freq))
-                        self.set_signal_parameter("channel2", "freq", float(freq))
-                    
-                    # Напряжения (пример - нужно адаптировать под вашу структуру)
-                    ua_ampl = mode.get_parameter("Settings", "Ua_ampl")
-                    if ua_ampl:
-                        self.set_signal_parameter("channel1", "amplUA", float(ua_ampl))
-                    
-                    ub_ampl = mode.get_parameter("Settings", "Ub_ampl")
-                    if ub_ampl:
-                        self.set_signal_parameter("channel1", "amplUB", float(ub_ampl))
-                    
-                    uc_ampl = mode.get_parameter("Settings", "Uc_ampl")
-                    if uc_ampl:
-                        self.set_signal_parameter("channel1", "amplUC", float(uc_ampl))
-                
-                # Применяем параметры к драйверу
-                self._apply_signal_params()
-                
-                # Выдаем сигналы
-                if self.retom_driver.is_open:
-                    result = self.out61()
-                    if result:
-                        messagebox.showinfo("Успех", f"Режим '{mode_name}' успешно применен")
-                        logger.info("GUI", f"Mode '{mode_name}' applied successfully")
-                    else:
-                        messagebox.showerror("Ошибка", f"Не удалось выдать сигналы для режима '{mode_name}'")
-                else:
-                    messagebox.showwarning("Предупреждение", "Устройство не открыто. Сначала нажмите Open.")
-                    
-            except Exception as e:
-                logger.error("GUI", f"Error applying mode: {e}")
-                messagebox.showerror("Ошибка", f"Ошибка применения режима:\n{str(e)}")
+
+        ## выставляем светодиоды
+        vals_outs_keys = list(self.modes.get_outputs_data().keys())
+        leds_out = mode.get_setpoints_leds(vals_outs_keys)
+
+        # Обновляем состояние заданных выходов
+        for i, state in enumerate(leds_out):
+            if i < 16:
+                self.expected_outputs_state[i] = state 
+
+        self._update_expected_outputs_gui() 
+
+        ## выставляем светодиоды
+        vals_ins_keys = list(self.modes.get_inputs_data().keys())
+        leds_in = mode.get_expected_leds(vals_ins_keys)
+
+        # Обновляем состояние заданных выходов
+        for i, state in enumerate(leds_in):
+            if i < 16:
+                self.setpoint_outputs_state[i] = state
+
+        self._update_setpoint_outputs_gui()
+
+        #logger.info("GUI", f"Applying mode: {mode_name}")
+
+        # ПЕРВЫЙ КАНАЛ
+
+        freq1 = mode.inputs.get('f1', 50.0)  
+        self.set_signal_parameter("channel1", "freq", float(freq1)) 
+
+        ia_ampl = mode.inputs.get('IA', 0)  # 0 - значение по умолчанию, если ключа нет
+        self.set_signal_parameter("channel1", "amplIA", float(ia_ampl)) 
+        ia_angl = mode.inputs.get('dIA', 0)  # 0 - значение по умолчанию, если ключа нет
+        self.set_signal_parameter("channel1", "anglIA", float(ia_angl)) 
+
+        ib_ampl = mode.inputs.get('IB', 0) 
+        self.set_signal_parameter("channel1", "amplIB", float(ib_ampl)) 
+        ib_angl = mode.inputs.get('dIB', 240)  
+        self.set_signal_parameter("channel1", "anglIB", float(ib_angl)) 
+
+        ic_ampl = mode.inputs.get('IC', 0) 
+        self.set_signal_parameter("channel1", "amplIC", float(ic_ampl)) 
+        ic_angl = mode.inputs.get('dIC', 120)  
+        self.set_signal_parameter("channel1", "anglIC", float(ic_angl)) 
+
+        ua_ampl = mode.inputs.get('UA1', 0)
+        self.set_signal_parameter("channel1", "amplUA", float(ua_ampl))
+        ua_angl = mode.inputs.get('dUA1', 0)
+        self.set_signal_parameter("channel1", "anglUA", float(ua_angl))
+
+        ub_ampl = mode.inputs.get('UB1', 0)
+        self.set_signal_parameter("channel1", "amplUB", float(ub_ampl))
+        ub_angl = mode.inputs.get('dUB1', 0)
+        self.set_signal_parameter("channel1", "anglUB", float(ub_angl))
+
+        uc_ampl = mode.inputs.get('UC1', 0)
+        self.set_signal_parameter("channel1", "amplUC", float(uc_ampl))
+        uc_angl = mode.inputs.get('dUC1', 0)
+        self.set_signal_parameter("channel1", "anglUC", float(uc_angl))
+
+        # ВТОРОЙ КАНАЛ
+        freq2 = mode.inputs.get('f2', 50.0)  
+        self.set_signal_parameter("channel2", "freq", float(freq2)) 
+
+        ia2_ampl = mode.inputs.get('IA1', 0)  # 0 - значение по умолчанию, если ключа нет
+        self.set_signal_parameter("channel2", "amplIA", float(ia2_ampl)) 
+        ia2_angl = mode.inputs.get('dIA1', 0)  # 0 - значение по умолчанию, если ключа нет
+        self.set_signal_parameter("channel2", "anglIA", float(ia2_angl)) 
+
+        ib2_ampl = mode.inputs.get('IB1', 0) 
+        self.set_signal_parameter("channel2", "amplIB", float(ib2_ampl)) 
+        ib2_angl = mode.inputs.get('dIB1', 240)  
+        self.set_signal_parameter("channel2", "anglIB", float(ib2_angl)) 
+
+        ic2_ampl = mode.inputs.get('IC1', 0) 
+        self.set_signal_parameter("channel2", "amplIC", float(ic2_ampl)) 
+        ic2_angl = mode.inputs.get('dIC1', 120)  
+        self.set_signal_parameter("channel2", "anglIC", float(ic2_angl)) 
+
+        ua2_ampl = mode.inputs.get('UA2', 0)
+        self.set_signal_parameter("channel2", "amplUA", float(ua2_ampl))
+        ua2_angl = mode.inputs.get('dUA2', 0)
+        self.set_signal_parameter("channel2", "anglUA", float(ua2_angl))
+
+        ub2_ampl = mode.inputs.get('UB2', 0)
+        self.set_signal_parameter("channel2", "amplUB", float(ub2_ampl))
+        ub2_angl = mode.inputs.get('dUB2', 0)
+        self.set_signal_parameter("channel2", "anglUB", float(ub2_angl))
+
+        uc2_ampl = mode.inputs.get('UC2', 0)
+        self.set_signal_parameter("channel2", "amplUC", float(uc2_ampl))
+        uc2_angl = mode.inputs.get('dUC2', 0)
+        self.set_signal_parameter("channel2", "anglUC", float(uc2_angl))
+
+        # Применяем параметры к драйверу
+        self._apply_signal_params()
+
+        # ГАРМОНИКИ
+
+        ia2harm_ampl = mode.inputs.get('IA2harm', 0)
+        self.set_harmonic_parameter("channel_hq", "amplA2harm", float(ia2harm_ampl))
+
+        ib2harm_ampl = mode.inputs.get('IB2harm', 0)
+        self.set_harmonic_parameter("channel_hq", "amplB2harm", float(ib2harm_ampl))
+
+        ic2harm_ampl = mode.inputs.get('IC2harm', 0)
+        self.set_harmonic_parameter("channel_hq", "amplC2harm", float(ic2harm_ampl))
+
+        ia5harm_ampl = mode.inputs.get('IA5harm', 0)
+        self.set_harmonic_parameter("channel_hq", "amplA5harm", float(ia5harm_ampl))
+
+        ib5harm_ampl = mode.inputs.get('IB5harm', 0)
+        self.set_harmonic_parameter("channel_hq", "amplB5harm", float(ib5harm_ampl))
+
+        ic5harm_ampl = mode.inputs.get('IC5harm', 0)
+        self.set_harmonic_parameter("channel_hq", "amplC5harm", float(ic5harm_ampl))
+
+        self.set_all_harmonics()
+
+        self._apply_harmonics()
+
+######################################################################################################################################################
+
+
 
     def _load_current_mode(self):
         """Загружает текущий активный режим (применяет его настройки к GUI)"""
@@ -547,76 +638,78 @@ class RetomApp:
         if not mode:
             return False
         
+        
+        # Обновляем ожидаемые выходы (маска)
+        if hasattr(mode, 'get_expected_outputs_mask'):
+            expected_mask = mode.get_expected_outputs_mask()
+            self.set_expected_outputs_mask(expected_mask)
+            #logger.info("GUI", f"Expected outputs mask set to 0x{expected_mask:04X}")
+        
+        # Загружаем параметры сигналов из режима (если есть)
+        if hasattr(mode, 'get_parameter'):
+            # Частота
+            freq = mode.get_parameter("Settings", "Frequency")
+            if freq and isinstance(freq, (int, float)):
+                self.set_signal_parameter("channel1", "freq", float(freq))
+                self.set_signal_parameter("channel2", "freq", float(freq))
+                #logger.info("GUI", f"Frequency set to {freq} Hz")
+            
+            # Напряжения (пример)
+            ua_ampl = mode.get_parameter("Settings", "Ua_ampl")
+            if ua_ampl and isinstance(ua_ampl, (int, float)):
+                self.set_signal_parameter("channel1", "amplUA", float(ua_ampl))
+                #logger.info("GUI", f"Ua amplitude set to {ua_ampl} V")
+        
+        # Обновляем кнопки навигации
+        self._update_mode_controls()
+        
+        # Дополнительно: можно загрузить данные из inputs.json и outputs.json
+        if hasattr(self.modes, 'get_inputs_data'):
+            inputs_data = self.modes.get_inputs_data()
+            if inputs_data:
+                pass
+                #logger.info("GUI", f"Inputs data loaded: {len(inputs_data)} entries")
+        
+        if hasattr(self.modes, 'get_outputs_data'):
+            outputs_data = self.modes.get_outputs_data()
+            if outputs_data:
+                pass
+                #logger.info("GUI", f"Outputs data loaded: {len(outputs_data)} entries")
+        
+        return True
+            
+    def set_harmonic_parameter(self, param_name: str, value: float) -> bool:
+        """
+        Установка параметра гармоники
+        
+        Args:
+            param_name: имя параметра (IA2harm, IB2harm, IC2harm, IA5harm, IB5harm, IC5harm)
+            value: амплитуда гармоники (0-100 В)
+        """
         try:
-            # Обновляем подписи заданных выходов
-            if hasattr(mode, 'get_outputs_labels'):
-                output_labels = mode.get_outputs_labels()
-                self._update_setpoint_outputs_text(output_labels)
-                logger.info("GUI", f"Outputs labels updated from mode: {mode.get_name() if hasattr(mode, 'get_name') else 'Unknown'}")
+            if param_name not in self.harmonics_vars:
+                logger.error("GUI", f"Invalid harmonic parameter: {param_name}")
+                return False
             
-            # Обновляем ожидаемые выходы (маска)
-            if hasattr(mode, 'get_expected_outputs_mask'):
-                expected_mask = mode.get_expected_outputs_mask()
-                self.set_expected_outputs_mask(expected_mask)
-                logger.info("GUI", f"Expected outputs mask set to 0x{expected_mask:04X}")
+            # Ограничиваем значение
+            if value < 0:
+                value = 0
+            if value > 100:
+                value = 100
+                logger.warning("GUI", f"{param_name} limited to 100 V")
             
-            # Загружаем параметры сигналов из режима (если есть)
-            if hasattr(mode, 'get_parameter'):
-                # Частота
-                freq = mode.get_parameter("Settings", "Frequency")
-                if freq and isinstance(freq, (int, float)):
-                    self.set_signal_parameter("channel1", "freq", float(freq))
-                    self.set_signal_parameter("channel2", "freq", float(freq))
-                    logger.info("GUI", f"Frequency set to {freq} Hz")
-                
-                # Напряжения (пример)
-                ua_ampl = mode.get_parameter("Settings", "Ua_ampl")
-                if ua_ampl and isinstance(ua_ampl, (int, float)):
-                    self.set_signal_parameter("channel1", "amplUA", float(ua_ampl))
-                    logger.info("GUI", f"Ua amplitude set to {ua_ampl} V")
+            # Устанавливаем значение в GUI переменную
+            self.harmonics_vars[param_name].set(value)
             
-            # Обновляем кнопки навигации
-            self._update_mode_controls()
-            
-            # Дополнительно: можно загрузить данные из inputs.json и outputs.json
-            if hasattr(self.modes, 'get_inputs_data'):
-                inputs_data = self.modes.get_inputs_data()
-                if inputs_data:
-                    logger.info("GUI", f"Inputs data loaded: {len(inputs_data)} entries")
-            
-            if hasattr(self.modes, 'get_outputs_data'):
-                outputs_data = self.modes.get_outputs_data()
-                if outputs_data:
-                    logger.info("GUI", f"Outputs data loaded: {len(outputs_data)} entries")
+            # Устанавливаем в драйвер
+            if hasattr(self.retom_driver, 'signals_hq'):
+                self.retom_driver.signals_hq["channel_hq"][param_name] = value
             
             return True
             
         except Exception as e:
-            logger.error("GUI", f"Error loading current mode: {e}")
+            logger.error("GUI", f"Error setting harmonic parameter: {e}")
             return False
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
     def _run_autotest(self):
@@ -849,7 +942,7 @@ class RetomApp:
                     self.retom_driver.signals[channel][param_name] = value
             
             logger.info("GUI", "Signal parameters applied successfully")
-            messagebox.showinfo("Успех", "Параметры сигналов применены")
+            #messagebox.showinfo("Успех", "Параметры сигналов применены")
         except Exception as e:
             logger.error("GUI", f"Error applying signal parameters: {e}")
             messagebox.showerror("Ошибка", f"Ошибка применения параметров: {e}")
@@ -867,8 +960,8 @@ class RetomApp:
                 
                 self.retom_driver.signals_hq["channel_hq"][param_name] = value
             
-            logger.info("GUI", "Harmonics parameters applied successfully")
-            messagebox.showinfo("Успех", "Параметры гармоник применены")
+            #logger.info("GUI", "Harmonics parameters applied successfully")
+            #messagebox.showinfo("Успех", "Параметры гармоник применены")
         except Exception as e:
             logger.error("GUI", f"Error applying harmonics: {e}")
             messagebox.showerror("Ошибка", f"Ошибка применения гармоник: {e}")
@@ -1200,6 +1293,10 @@ class RetomApp:
 
 
 
+########################################################################################################################################
+############################### РАБОЧИЕ МЕТОДЫ ОБНОВНЕНИЯ НАДПИСЕЙ ОЖИДАЕМЫХ ВХОДОВ И ВЫХОДОВ ##########################################
+########################################################################################################################################
+
     def _update_setpoint_outputs_text(self, labels_list: List[str]):
         """
         Обновляет текстовые подписи для заданных выходов
@@ -1221,9 +1318,10 @@ class RetomApp:
         
         for i in range(16):
             lbl = self.setpoint_labels[i]
-            lbl.config(text=f"SP{i+1}: {full_labels[i]}")
-        
-        logger.info("GUI", f"Setpoint outputs labels updated with {min(len(labels_list), 16)} custom labels")
+            #lbl.config(text=f"{i+1}: {full_labels[i]}")
+            lbl.config(text=f"{full_labels[i]}")    
+
+        #logger.info("GUI", f"Setpoint outputs labels updated with {min(len(labels_list), 16)} custom labels")
 
     def _update_expected_outputs_text(self, labels_list: List[str]):
         """
@@ -1246,9 +1344,10 @@ class RetomApp:
         
         for i in range(16):
             lbl = self.expected_labels[i]
-            lbl.config(text=f"EX{i+1}: {full_labels[i]}")
-        
-        logger.info("GUI", f"Expected outputs labels updated with {min(len(labels_list), 16)} custom labels")
+            #lbl.config(text=f"EX{i+1}: {full_labels[i]}")
+            lbl.config(text=f"{full_labels[i]}")
+
+        #logger.info("GUI", f"Expected outputs labels updated with {min(len(labels_list), 16)} custom labels")
 
     def _update_inputs_text(self, labels_list: List[str]):
         """
@@ -1273,10 +1372,11 @@ class RetomApp:
             lbl = self.input_labels[i]
             lbl.config(text=f"In{i+1}: {full_labels[i]}")
         
-        logger.info("GUI", f"Inputs labels updated with {min(len(labels_list), 16)} custom labels")
-        logger.info("GUI", "Inputs labels updated")
+        #logger.info("GUI", f"Inputs labels updated with {min(len(labels_list), 16)} custom labels")
+        #logger.info("GUI", "Inputs labels updated")
 
-
+########################################################################################################################################
+########################################################################################################################################
 
 
     def _update_setpoint_outputs_gui(self):
@@ -1292,7 +1392,7 @@ class RetomApp:
             text_status = "ON" if is_active else "OFF"
             
             canvas.itemconfig(circle_id, fill=color)
-            lbl.config(text=f"SP{i+1}: {text_status}")
+            #lbl.config(text=f"SP{i+1}: {text_status}")
     
     def _update_expected_outputs_gui(self):
         """Обновляет отображение ожидаемых выходов в GUI"""
@@ -1307,7 +1407,7 @@ class RetomApp:
             text_status = "ON" if is_active else "OFF"
             
             canvas.itemconfig(circle_id, fill=color)
-            lbl.config(text=f"EX{i+1}: {text_status}")
+            #lbl.config(text=f"EX{i+1}: {text_status}")
 
     # ============ МЕТОДЫ АВТОМАТИЗАЦИИ ============
     
@@ -1446,7 +1546,7 @@ class RetomApp:
                 if param_name in self.signal_vars[channel]:
                     self.signal_vars[channel][param_name].set(value)
             
-            logger.info("GUI", f"Set {channel}.{param_name} = {value}")
+            #logger.info("GUI", f"Set {channel}.{param_name} = {value}")
             return True
             
         except Exception as e:
@@ -1483,7 +1583,7 @@ class RetomApp:
             if hasattr(self.retom_driver, 'signals_hq'):
                 self.retom_driver.signals_hq["channel_hq"][harmonic_name] = value
             
-            logger.info("GUI", f"Set {harmonic_name} = {value} V")
+            #logger.info("GUI", f"Set {harmonic_name} = {value} V")
             return True
             
         except Exception as e:
@@ -1545,7 +1645,7 @@ class RetomApp:
             if ic_angl is not None:
                 self.set_signal_parameter(channel, "anglIC", ic_angl)
             
-            logger.info("GUI", f"All signals set for {channel}")
+            #logger.info("GUI", f"All signals set for {channel}")
             return True
             
         except Exception as e:
@@ -1580,7 +1680,7 @@ class RetomApp:
             if c5 is not None:
                 self.set_harmonic("amplC5harm", c5)
             
-            logger.info("GUI", "All harmonics set")
+            #logger.info("GUI", "All harmonics set")
             return True
             
         except Exception as e:
@@ -1643,7 +1743,7 @@ class RetomApp:
         
         while time.time() - start_time < timeout:
             if self.inputs_state[input_number - 1] == target_state:
-                logger.info("GUI", f"Binary input {input_number} reached state {target_state}")
+                #logger.info("GUI", f"Binary input {input_number} reached state {target_state}")
                 return True
             time.sleep(0.05)
         

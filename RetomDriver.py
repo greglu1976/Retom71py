@@ -39,7 +39,7 @@ class RetomDriver:
         try:
             comtypes.client.GetModule(RTDI_TLB)
             comtypes.client.GetModule(RTLINK_TLB)
-            logger.info(MODULE_NAME, "TLB modules loaded successfully")            
+            #logger.info(MODULE_NAME, "TLB modules loaded successfully")            
         except Exception as e:
             logger.error(MODULE_NAME, f"Could not load TLB modules: {e}")
 

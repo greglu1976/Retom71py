@@ -58,7 +58,7 @@ class ModesHandler:
         # Обновляем список режимов
         self.modes = [mode for _, mode in sorted_pairs]
         
-        logger.info("Modes", f"Sorted {len(self.modes)} modes naturally")
+        #logger.info("Modes", f"Sorted {len(self.modes)} modes naturally")
     
     def _load_modes_from_folder(self):
         """Загрузка режимов из Excel файлов в папке"""
@@ -107,14 +107,14 @@ class ModesHandler:
                     if mode.load():
                         self.modes.append(mode)
                         loaded_count += 1
-                        logger.info("Modes", f"Loaded mode: {mode.get_name() if hasattr(mode, 'get_name') else os.path.basename(filepath)}")
+                        #logger.info("Modes", f"Loaded mode: {mode.get_name() if hasattr(mode, 'get_name') else os.path.basename(filepath)}")
                     else:
                         failed_files.append(os.path.basename(filepath))
                 else:
                     # Если нет метода load, просто добавляем
                     self.modes.append(mode)
                     loaded_count += 1
-                    logger.info("Modes", f"Added mode: {mode.get_name() if hasattr(mode, 'get_name') else os.path.basename(filepath)}")
+                    #logger.info("Modes", f"Added mode: {mode.get_name() if hasattr(mode, 'get_name') else os.path.basename(filepath)}")
                 
             except Exception as e:
                 logger.error("Modes", f"Failed to load {os.path.basename(filepath)}: {e}")
@@ -126,7 +126,38 @@ class ModesHandler:
         
         if failed_files:
             logger.warning("Modes", f"Failed to load: {', '.join(failed_files)}")
-    
+
+
+
+    def filter_io_data(self, data_dict):
+        """
+        Исключает из словаря ключи с аналоговыми сигналами (токи, напряжения)
+        
+        Args:
+            data_dict: исходный словарь с данными inputs/outputs
+        
+        Returns:
+            dict: отфильтрованный словарь только с дискретными сигналами
+        """
+        # Ключи для исключения (аналоговые сигналы)
+        exclude_keys = [
+            'IA', 'IB', 'IC', 'dIA', 'dIB', 'dIC',
+            'IA1', 'IB1', 'IC1', 'dIA1', 'dIB1', 'dIC1',
+            'UA1', 'dUA1', 'UB1', 'dUB1', 'UC1', 'dUC1',
+            'UA2', 'dUA2', 'UB2', 'dUB2', 'UC2', 'dUC2',
+            'IA2harm', 'IB2harm', 'IC2harm', 
+            'IA5harm', 'IB5harm', 'IC5harm'            
+        ]
+        
+        # Создаем новый словарь без исключенных ключей
+        filtered_dict = {
+            key: value for key, value in data_dict.items() 
+            if key not in exclude_keys
+        }
+        
+        return filtered_dict
+
+
     def _load_json_files(self):
         """Загрузка JSON файлов inputs.json и outputs.json"""
         # Загрузка inputs.json
@@ -135,23 +166,23 @@ class ModesHandler:
             try:
                 with open(inputs_path, 'r', encoding='utf-8') as f:
                     self.inputs_data = json.load(f)
-                logger.info("Modes", f"Loaded inputs from {inputs_path}")
-                print(self.inputs_data)
+                #logger.info("Modes", f"Loaded inputs from {inputs_path}")
             except Exception as e:
                 logger.error("Modes", f"Failed to load {inputs_path}: {e}")
                 self.inputs_data = {}
         else:
             logger.warning("Modes", f"File not found: {inputs_path}")
             self.inputs_data = {}
-        
+
+        self.inputs_data = self.filter_io_data(self.inputs_data)
+
         # Загрузка outputs.json
         outputs_path = os.path.join(self.path_to_dir, self.outputs)
         if os.path.exists(outputs_path):
             try:
                 with open(outputs_path, 'r', encoding='utf-8') as f:
                     self.outputs_data = json.load(f)
-                logger.info("Modes", f"Loaded outputs from {outputs_path}")
-                print(self.outputs_data)
+                #logger.info("Modes", f"Loaded outputs from {outputs_path}")
             except Exception as e:
                 logger.error("Modes", f"Failed to load {outputs_path}: {e}")
                 self.outputs_data = {}

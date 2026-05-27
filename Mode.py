@@ -147,48 +147,7 @@ class Mode:
         """Возвращает все параметры указанного листа"""
         attr_name = self._get_attribute_name(sheet)
         return getattr(self, attr_name, {}).copy()
-    
-    def get_outputs_labels(self) -> List[str]:
-        """
-        Возвращает список названий для выходов из листа Outputs
-        
-        Returns:
-            список из 16 названий (недостающие заполняются "Не назначено")
-        """
-        labels = ["Не назначено"] * 16
-        
-        if self.outputs:
-            # Предполагаем, что в Outputs есть колонки Output1...Output16
-            for i in range(1, 17):
-                label_key = f"Output{i}"
-                if label_key in self.outputs:
-                    labels[i-1] = str(self.outputs[label_key])
-                # Альтернативный вариант: колонка Label
-                elif f"Label{i}" in self.outputs:
-                    labels[i-1] = str(self.outputs[f"Label{i}"])
-        
-        return labels
-    
-    def get_inputs_labels(self) -> List[str]:
-        """
-        Возвращает список названий для входов из листа Inputs
-        
-        Returns:
-            список из 16 названий (недостающие заполняются "Не назначено")
-        """
-        labels = ["Не назначено"] * 16
-        
-        if self.inputs:
-            # Предполагаем, что в Inputs есть колонки Input1...Input16
-            for i in range(1, 17):
-                label_key = f"Input{i}"
-                if label_key in self.inputs:
-                    labels[i-1] = str(self.inputs[label_key])
-                # Альтернативный вариант: колонка Label
-                elif f"Label{i}" in self.inputs:
-                    labels[i-1] = str(self.inputs[f"Label{i}"])
-        
-        return labels
+
     
     def get_expected_outputs_mask(self) -> int:
         """
@@ -294,6 +253,75 @@ class Mode:
                 print(f"  {key}: {value}")
 
 
+
+    def get_setpoints_leds(self, keys_list):
+        """
+        Получает список ключей и возвращает список состояний для индикаторов
+        
+        Args:
+            keys_list: список ключей для поиска в outputs
+        
+        Returns:
+            list: список из 16 булевых значений (True/False) для индикаторов
+        """
+        # Инициализируем список из 16 значений False
+        result = [False] * 16
+        
+        # Проходим по каждому ключу в keys_list
+        for idx, key in enumerate(keys_list):
+            if idx >= 16:  # Ограничиваем 16 выходами
+                break
+                
+            # Проверяем наличие ключа в outputs
+            if key in self.outputs:
+                # Проверяем значение
+                value = self.outputs[key]
+                
+                # Если значение True или строка/число, преобразуем в булево
+                if isinstance(value, bool):
+                    result[idx] = value
+                elif isinstance(value, (int, float)):
+                    result[idx] = bool(value)
+                elif isinstance(value, str):
+                    result[idx] = value.lower() in ['true', '1', 'yes', 'on']
+            
+        return result
+
+    def get_expected_leds(self, keys_list):
+        """
+        Получает список ключей и возвращает список состояний для ожидаемых индикаторов
+        
+        Args:
+            keys_list: список ключей для поиска в inputs (ожидаемые состояния)
+        
+        Returns:
+            list: список из 16 булевых значений (True/False) для индикаторов
+        """
+        # Инициализируем список из 16 значений False
+        result = [False] * 16
+        
+        # Проходим по каждому ключу в keys_list
+        for idx, key in enumerate(keys_list):
+            if idx >= 16:  # Ограничиваем 16 выходами
+                break
+                
+            # Проверяем наличие ключа в inputs (ожидаемые состояния)
+            if key in self.inputs:
+                # Проверяем значение
+                value = self.inputs[key]
+                
+                # Если значение True или строка/число, преобразуем в булево
+                if isinstance(value, bool):
+                    result[idx] = value
+                elif isinstance(value, (int, float)):
+                    result[idx] = bool(value)
+                elif isinstance(value, str):
+                    result[idx] = value.lower() in ['true', '1', 'yes', 'on']
+        
+        return result
+
+
+
 # Пример использования
 if __name__ == "__main__":
     # Создание и загрузка режима (имя автоматически будет "1")
@@ -304,10 +332,7 @@ if __name__ == "__main__":
     
     # Получение имени режима
     print(f"\nИмя режима: {mode.get_name()}")
-    
-    # Получение названий выходов
-    output_labels = mode.get_outputs_labels()
-    print(f"\nНазвания выходов: {output_labels[:5]}...")
+
     
     # Получение маски ожидаемых выходов
     expected_mask = mode.get_expected_outputs_mask()
@@ -329,5 +354,3 @@ if __name__ == "__main__":
     else:
         print("\nРежим загружен корректно")
     
-    # Сохранение изменений в новый файл
-    # mode.save_to_excel("modified_mode.xlsx")
